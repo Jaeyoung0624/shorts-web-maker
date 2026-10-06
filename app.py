@@ -284,6 +284,7 @@ def fetch_shorts(is_additional=False):
                     st.session_state.all_shorts = new_results
                     
                 st.success("분석 완료!")
+                st.rerun()  # 👈 이 줄을 바로 아래에 추가해 주세요!
                 return
             except Exception as e:
                 last_err = e
