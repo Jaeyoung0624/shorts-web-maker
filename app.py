@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 import streamlit.components.v1 as components
 import re
 import json
@@ -94,19 +95,34 @@ def analyze_video_with_gemini(yt_url, key):
     * 주의: 자막 텍스트(text)는 숏츠 화면에 맞게 한 줄(10~15자 내외)로 짧고 타격감 있게 끊어주세요.
     """
 
-    # Gemini에 유튜브 링크와 프롬프트를 함께 직접 전달
-    response = client.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=[
-            types.Part.from_uri(file_uri=yt_url, mime_type="video/*"),
-            prompt
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.2
-        )
-    )
-    return json.loads(response.text)
+    candidate_models = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.8-flash"
+    ]
+    
+    last_err = None
+    for model_name in candidate_models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[
+                    types.Part.from_uri(file_uri=yt_url, mime_type="video/*"),
+                    prompt
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
+            )
+            return json.loads(response.text)
+        except Exception as e:
+            last_err = e
+            time.sleep(1)
+            continue
+            
+    raise last_err
 
 def generate_srt_content(subtitles):
     def to_srt_time(sec):
