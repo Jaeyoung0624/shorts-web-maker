@@ -1,3 +1,2 @@
 streamlit
-youtube-transcript-api
 google-genai
