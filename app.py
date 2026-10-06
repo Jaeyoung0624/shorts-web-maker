@@ -34,6 +34,18 @@ components.html(
 st.title("🎬YouTube롱폼 ➔ 9:16 숏츠 메이커")
 st.write("유튜브 링크만 넣으면 Gemini가 영상을 직접 분석해 숏츠 구간과 9:16 XML/자막을 생성합니다.")
 
+# 💡 API 키 발급 가이드 (접이식)
+with st.expander("❓ Gemini API 키는 어디서 무료로 발급받나요? (1분 컷)"):
+    st.markdown("""
+    1. **[Google AI Studio (클릭)](https://aistudio.google.com/app/apikey)** 에 접속해 구글 계정으로 로그인합니다.
+    2. 화면 좌측 또는 상단의 **[Create API key]** 파란색 버튼을 클릭합니다.
+    3. 안내창이 뜨면 **[Create API key in new project]** 를 선택합니다.
+    4. 생성된 영문+숫자 긴 문자열(키)을 **[Copy]** 하여 위의 입력창에 붙여넣으시면 됩니다.
+    
+    * **비용 안내:** 신용카드 등록 없이 완전 무료(하루 1,500회)로 사용 가능합니다.
+    * **자동 저장:** 한 번 입력해 두시면 브라우저를 껐다 켜도 자동으로 유지됩니다.
+    """)
+    
 # 입력창 (기존에 저장된 키가 있으면 기본값으로 자동 채움)
 api_key_input = st.text_input(
     "Gemini API Key", 
@@ -58,16 +70,13 @@ if api_key_input and api_key_input != saved_key:
 
 api_key = api_key_input or saved_key
 
-# 💡 API 키 발급 가이드 (접이식)
-with st.expander("❓ Gemini API 키는 어디서 무료로 발급받나요? (1분 컷)"):
+# 🎬 프리미어 프로 사용법 가이드 (맨 하단 안내창)
+with st.expander("🎬 다운로드한 XML & 자막 프리미어 프로 사용법 (클릭)"):
     st.markdown("""
-    1. **[Google AI Studio (클릭)](https://aistudio.google.com/app/apikey)** 에 접속해 구글 계정으로 로그인합니다.
-    2. 화면 좌측 또는 상단의 **[Create API key]** 파란색 버튼을 클릭합니다.
-    3. 안내창이 뜨면 **[Create API key in new project]** 를 선택합니다.
-    4. 생성된 영문+숫자 긴 문자열(키)을 **[Copy]** 하여 위의 입력창에 붙여넣으시면 됩니다.
-    
-    * **비용 안내:** 신용카드 등록 없이 완전 무료(하루 1,500회)로 사용 가능합니다.
-    * **자동 저장:** 한 번 입력해 두시면 브라우저를 껐다 켜도 자동으로 유지됩니다.
+    1. **XML 임포트**: 다운로드한 `.xml` 파일을 프리미어 프로의 **프로젝트 패널**로 드래그합니다.
+    2. **미디어 연결**: 미디어 연결(Link Media) 창이 뜨면 다운받아둔 **원본 유튜브 영상 파일**을 지정해 줍니다.
+    3. **자막 얹기**: 다운로드한 `.srt` 파일을 타임라인 0초 지점의 **자막 트랙**으로 드래그해 얹습니다.
+    4. **화면 맞추기**: 9:16 비율에 맞게 영상 위치(Position)를 조절하거나 `Sequence > Auto Reframe Sequence`를 실행하면 완성!
     """)
 
 youtube_url = st.text_input("🔗 유튜브 영상 링크")
@@ -337,11 +346,3 @@ if st.session_state.all_shorts:
                     key=f"srt_btn_seq_{idx}"
                 )
 
-# 🎬 프리미어 프로 사용법 가이드 (맨 하단 안내창)
-with st.expander("🎬 다운로드한 XML & 자막 프리미어 프로 사용법 (클릭)"):
-    st.markdown("""
-    1. **XML 임포트**: 다운로드한 `.xml` 파일을 프리미어 프로의 **프로젝트 패널**로 드래그합니다.
-    2. **미디어 연결**: 미디어 연결(Link Media) 창이 뜨면 다운받아둔 **원본 유튜브 영상 파일**을 지정해 줍니다.
-    3. **자막 얹기**: 다운로드한 `.srt` 파일을 타임라인 0초 지점의 **자막 트랙**으로 드래그해 얹습니다.
-    4. **화면 맞추기**: 9:16 비율에 맞게 영상 위치(Position)를 조절하거나 `Sequence > Auto Reframe Sequence`를 실행하면 완성!
-    """)
