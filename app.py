@@ -225,13 +225,13 @@ def fetch_shorts(is_additional=False):
         st.error("유튜브 링크를 입력해 주세요.")
         return
 
-    # 이미 뽑았던 구간 리스트를 텍스트로 정리
+    # 이미 뽑았던 구간 리스트 정리 (유연한 추가 탐색 유도)
     excluded_info = ""
     if is_additional and st.session_state.all_shorts:
         ranges = [f"- {int(item['start_sec']//60)}분 {int(item['start_sec']%60)}초 ~ {int(item['end_sec']//60)}분 {int(item['end_sec']%60)}초" for item in st.session_state.all_shorts]
-        excluded_info = f"\n\n[중요: 아래 이미 추천된 구간들과 겹치지 않는 완전히 새로운 구간을 뽑아주세요]:\n" + "\n".join(ranges)
+        excluded_info = f"\n\n[참고: 이미 추천된 다음 구간 외에, 영상의 서브 에피소드나 다른 재미있는 구간 3개를 추가 발굴해 주세요]:\n" + "\n".join(ranges)
 
-    client = genai.Client(api_key=key if 'key' in locals() else api_key)
+    client = genai.Client(api_key=api_key)
     prompt = f"""
     이 유튜브 영상을 분석해서 바이럴 가능성이 높은 30초~55초 길이의 숏츠 구간 3개를 선정해 주세요.
     각 쇼츠 구간마다 해당 구간에서 말하는 대사(자막)와 정확한 타임스탬프(해당 쇼츠 기준 상대 시간, 0초부터 시작)도 함께 생성해야 합니다.
@@ -278,13 +278,17 @@ def fetch_shorts(is_additional=False):
                 )
                 new_results = json.loads(response.text)
                 
+                if not new_results:
+                    st.warning("영상의 주요 하이라이트가 대부분 추출되어 더 이상 새로운 구간을 찾지 못했습니다.")
+                    return
+
                 if is_additional:
                     st.session_state.all_shorts.extend(new_results)
                 else:
                     st.session_state.all_shorts = new_results
                     
                 st.success("분석 완료!")
-                st.rerun()  # 👈 이 줄을 바로 아래에 추가해 주세요!
+                st.rerun()
                 return
             except Exception as e:
                 last_err = e
@@ -322,7 +326,7 @@ if st.session_state.all_shorts:
                     data=xml_data,
                     file_name=f"Shorts_{idx}_{clean_t}.xml",
                     mime="application/xml",
-                    key=f"xml_btn_{idx}_{start}"
+                    key=f"xml_btn_seq_{idx}"
                 )
             with c2:
                 st.download_button(
@@ -330,5 +334,14 @@ if st.session_state.all_shorts:
                     data=srt_data,
                     file_name=f"Shorts_{idx}_{clean_t}.srt",
                     mime="text/plain",
-                    key=f"srt_btn_{idx}_{start}"
+                    key=f"srt_btn_seq_{idx}"
                 )
+
+# 🎬 프리미어 프로 사용법 가이드 (맨 하단 안내창)
+with st.expander("🎬 다운로드한 XML & 자막 프리미어 프로 사용법 (클릭)"):
+    st.markdown("""
+    1. **XML 임포트**: 다운로드한 `.xml` 파일을 프리미어 프로의 **프로젝트 패널**로 드래그합니다.
+    2. **미디어 연결**: 미디어 연결(Link Media) 창이 뜨면 다운받아둔 **원본 유튜브 영상 파일**을 지정해 줍니다.
+    3. **자막 얹기**: 다운로드한 `.srt` 파일을 타임라인 0초 지점의 **자막 트랙**으로 드래그해 얹습니다.
+    4. **화면 맞추기**: 9:16 비율에 맞게 영상 위치(Position)를 조절하거나 `Sequence > Auto Reframe Sequence`를 실행하면 완성!
+    """)
