@@ -38,7 +38,7 @@ def analyze_video_with_gemini(yt_url, key):
 
     # Gemini에 유튜브 링크와 프롬프트를 함께 직접 전달
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=[
             types.Part.from_uri(file_uri=yt_url, mime_type="video/*"),
             prompt
