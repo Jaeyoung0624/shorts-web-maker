@@ -1,70 +1,56 @@
 import streamlit as st
-import os
 import re
 import json
-import io
 import xml.etree.ElementTree as ET
-from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
 from google.genai import types
 
 st.set_page_config(page_title="AI 숏츠 메이커", page_icon="🎬")
 
 st.title("🎬 YouTube 롱폼 ➔ 9:16 숏츠 메이커")
-st.write("유튜브 링크를 넣으면 AI가 바이럴 구간을 뽑고, 프리미어용 9:16 XML과 SRT 자막을 만들어줍니다.")
+st.write("유튜브 링크만 넣으면 Gemini가 영상을 직접 분석해 숏츠 구간과 9:16 XML/자막을 생성합니다.")
 
-# 사이드바 또는 설정에서 API 키 입력
-api_key = st.text_input("Gemini API Key", type="password", help="발급받은 구글 Gemini API 키를 입력하세요")
+api_key = st.text_input("Gemini API Key", type="password", help="구글 Gemini API 키를 입력하세요")
 youtube_url = st.text_input("🔗 유튜브 영상 링크")
 
-def extract_video_id(url):
-    match = re.search(r"(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})", url)
-    return match.group(1) if match else None
-
-def get_transcript(video_id):
-    try:
-        ytt = YouTubeTranscriptApi()
-        try:
-            fetched = ytt.fetch(video_id, languages=['ko', 'en'])
-            transcript_list = fetched.to_raw_data()
-        except AttributeError:
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['ko', 'en'])
-    except Exception as e:
-        return None, None
-
-    transcript_text = ""
-    subtitles = []
-    for item in transcript_list:
-        start = round(item['start'], 2)
-        end = round(item['start'] + item['duration'], 2)
-        text = item['text'].replace("\n", " ").strip()
-        subtitles.append({"start": start, "end": end, "text": text})
-        transcript_text += f"[{round(start, 1)}s - {round(end, 1)}s] {text}\n"
-    return transcript_text, subtitles
-
-def analyze_shorts(transcript_text, key):
+def analyze_video_with_gemini(yt_url, key):
     client = genai.Client(api_key=key)
-    prompt = f"""
-    당신은 전문 유튜브 숏츠 편집자입니다.
-    아래 대본을 보고 시청자의 흥미를 끌 수 있는 30초~55초 사이의 완결성 있는 숏츠 후보 3개를 선정하세요.
-    [대본]
-    {transcript_text}
-    반드시 아래 JSON 포맷으로만 응답하세요:
+    
+    prompt = """
+    이 유튜브 영상을 분석해서 바이럴 가능성이 높은 30초~55초 길이의 숏츠 구간 3개를 선정해 주세요.
+    각 쇼츠 구간마다 해당 구간에서 말하는 대사(자막)와 정확한 타임스탬프(해당 쇼츠 기준 상대 시간, 0초부터 시작)도 함께 생성해야 합니다.
+
+    반드시 아래와 같은 JSON 형식으로만 응답하세요:
     [
-      {{"title": "쇼츠 제목", "start_sec": 시작_초, "end_sec": 종료_초, "hook_reason": "추천 이유"}}
+      {
+        "title": "쇼츠 제목",
+        "start_sec": 45.0,
+        "end_sec": 92.0,
+        "hook_reason": "추천 이유",
+        "subtitles": [
+          {"start": 0.0, "end": 2.5, "text": "첫 번째 한 줄 자막"},
+          {"start": 2.5, "end": 4.8, "text": "두 번째 한 줄 자막"}
+        ]
+      }
     ]
+    * 주의: 자막 텍스트(text)는 숏츠 화면에 맞게 한 줄(10~15자 내외)로 짧고 타격감 있게 끊어주세요.
     """
+
+    # Gemini에 유튜브 링크와 프롬프트를 함께 직접 전달
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=prompt,
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part.from_uri(file_uri=yt_url, mime_type="video/*"),
+            prompt
+        ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=0.3
+            temperature=0.2
         )
     )
     return json.loads(response.text)
 
-def generate_srt_content(subtitles, start_sec, end_sec):
+def generate_srt_content(subtitles):
     def to_srt_time(sec):
         hrs = int(sec // 3600)
         mins = int((sec % 3600) // 60)
@@ -72,26 +58,12 @@ def generate_srt_content(subtitles, start_sec, end_sec):
         msecs = int((sec - int(sec)) * 1000)
         return f"{hrs:02d}:{mins:02d}:{secs:02d},{msecs:03d}"
 
-    matched = [s for s in subtitles if s['end'] >= start_sec and s['start'] <= end_sec]
     output = []
-    prev_text = ""
-    counter = 1
-
-    for item in matched:
-        raw_text = item['text'].strip()
-        if prev_text and raw_text.startswith(prev_text):
-            cur = raw_text[len(prev_text):].strip()
-        elif prev_text and prev_text in raw_text:
-            cur = raw_text.replace(prev_text, "").strip()
-        else:
-            cur = raw_text
-        if not cur:
-            continue
-        rel_start = max(0.0, item['start'] - start_sec)
-        rel_end = max(rel_start + 0.5, item['end'] - start_sec)
-        output.append(f"{counter}\n{to_srt_time(rel_start)} --> {to_srt_time(rel_end)}\n{cur}\n")
-        prev_text = raw_text
-        counter += 1
+    for idx, item in enumerate(subtitles, 1):
+        s_time = to_srt_time(float(item['start']))
+        e_time = to_srt_time(float(item['end']))
+        txt = item['text'].strip()
+        output.append(f"{idx}\n{s_time} --> {e_time}\n{txt}\n")
     return "\n".join(output)
 
 def generate_xml_content(seq_name, start_sec, end_sec, fps=30):
@@ -159,14 +131,10 @@ if st.button("🚀 숏츠 구간 추출 및 파일 생성", type="primary"):
     elif not youtube_url:
         st.error("유튜브 링크를 입력해 주세요.")
     else:
-        v_id = extract_video_id(youtube_url)
-        with st.spinner("자막 추출 및 하이라이트 분석 중..."):
-            transcript, subs = get_transcript(v_id)
-            if not transcript:
-                st.error("자막을 불러오지 못했습니다. 자막이 지원되는 영상인지 확인해 주세요.")
-            else:
-                results = analyze_shorts(transcript, api_key)
-                st.success("분석 완료!")
+        with st.spinner("Gemini가 유튜브 영상을 직접 시청하고 분석 중입니다 (약 15~30초 소요)..."):
+            try:
+                results = analyze_video_with_gemini(youtube_url, api_key)
+                st.success("영상 분석 완료!")
 
                 for idx, r in enumerate(results, 1):
                     clean_t = re.sub(r'[^0-9a-zA-Z가-힣\s_-]', '', r['title'])[:15]
@@ -178,7 +146,7 @@ if st.button("🚀 숏츠 구간 추출 및 파일 생성", type="primary"):
                         st.write(f"⏱ **구간:** {int(start//60):02d}:{int(start%60):02d} ~ {int(end//60):02d}:{int(end%60):02d}")
                         st.write(f"💡 **선정 이유:** {r['hook_reason']}")
 
-                        srt_data = generate_srt_content(subs, start, end)
+                        srt_data = generate_srt_content(r.get('subtitles', []))
                         xml_data = generate_xml_content(f"Shorts_{idx}_{clean_t}", start, end)
 
                         col1, col2 = st.columns(2)
@@ -198,3 +166,5 @@ if st.button("🚀 숏츠 구간 추출 및 파일 생성", type="primary"):
                                 mime="text/plain",
                                 key=f"srt_{idx}"
                             )
+            except Exception as e:
+                st.error(f"분석 중 오류가 발생했습니다: {e}")
