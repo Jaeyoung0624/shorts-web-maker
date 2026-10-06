@@ -242,3 +242,136 @@ if st.button("🚀 숏츠 구간 추출 및 파일 생성", type="primary"):
                             )
             except Exception as e:
                 st.error(f"분석 중 오류가 발생했습니다: {e}")
+
+# 세션 상태 초기화 (누적 보관용 리스트)
+if "all_shorts" not in st.session_state:
+    st.session_state.all_shorts = []
+
+col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 0.5])
+
+with col_btn1:
+    btn_start = st.button("🚀 숏츠 구간 최초 추출 (3개)", type="primary", use_container_width=True)
+
+with col_btn2:
+    # 기존 결과가 1개 이상 있을 때만 활성화
+    btn_more = st.button("➕ 다른 구간 3개 추가 추출", use_container_width=True, disabled=len(st.session_state.all_shorts) == 0)
+
+with col_btn3:
+    if st.button("🗑️ 전체 초기화", use_container_width=True):
+        st.session_state.all_shorts = []
+        st.rerun()
+
+def fetch_shorts(is_additional=False):
+    if not api_key:
+        st.error("Gemini API 키를 입력해 주세요.")
+        return
+    if not youtube_url:
+        st.error("유튜브 링크를 입력해 주세요.")
+        return
+
+    # 이미 뽑았던 구간 리스트를 텍스트로 정리
+    excluded_info = ""
+    if is_additional and st.session_state.all_shorts:
+        ranges = [f"- {int(item['start_sec']//60)}분 {int(item['start_sec']%60)}초 ~ {int(item['end_sec']//60)}분 {int(item['end_sec']%60)}초" for item in st.session_state.all_shorts]
+        excluded_info = f"\n\n[중요: 아래 이미 추천된 구간들과 겹치지 않는 완전히 새로운 구간을 뽑아주세요]:\n" + "\n".join(ranges)
+
+    client = genai.Client(api_key=key if 'key' in locals() else api_key)
+    prompt = f"""
+    이 유튜브 영상을 분석해서 바이럴 가능성이 높은 30초~55초 길이의 숏츠 구간 3개를 선정해 주세요.
+    각 쇼츠 구간마다 해당 구간에서 말하는 대사(자막)와 정확한 타임스탬프(해당 쇼츠 기준 상대 시간, 0초부터 시작)도 함께 생성해야 합니다.
+    {excluded_info}
+
+    반드시 아래와 같은 JSON 형식으로만 응답하세요:
+    [
+      {{
+        "title": "쇼츠 제목",
+        "start_sec": 45.0,
+        "end_sec": 92.0,
+        "hook_reason": "추천 이유",
+        "subtitles": [
+          {{"start": 0.0, "end": 2.5, "text": "첫 번째 한 줄 자막"}},
+          {{"start": 2.5, "end": 4.8, "text": "두 번째 한 줄 자막"}}
+        ]
+      }}
+    ]
+    * 주의: 자막 텍스트(text)는 숏츠 화면에 맞게 한 줄(10~15자 내외)로 짧고 타격감 있게 끊어주세요.
+    """
+
+    candidate_models = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.8-flash"
+    ]
+
+    spinner_text = "이전 구간을 제외하고 새로운 구간 3개를 탐색 중입니다..." if is_additional else "Gemini가 유튜브 영상을 시청하고 분석 중입니다..."
+    with st.spinner(spinner_text):
+        last_err = None
+        for model_name in candidate_models:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Part.from_uri(file_uri=youtube_url, mime_type="video/*"),
+                        prompt
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.3
+                    )
+                )
+                new_results = json.loads(response.text)
+                
+                if is_additional:
+                    st.session_state.all_shorts.extend(new_results)
+                else:
+                    st.session_state.all_shorts = new_results
+                    
+                st.success("분석 완료!")
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(1)
+                continue
+        st.error(f"분석 중 오류가 발생했습니다: {last_err}")
+
+if btn_start:
+    fetch_shorts(is_additional=False)
+
+if btn_more:
+    fetch_shorts(is_additional=True)
+
+# 누적된 쇼츠 결과 출력
+if st.session_state.all_shorts:
+    st.write(f"### 📋 생성된 숏츠 후보 (총 {len(st.session_state.all_shorts)}개)")
+    
+    for idx, r in enumerate(st.session_state.all_shorts, 1):
+        clean_t = re.sub(r'[^0-9a-zA-Z가-힣\s_-]', '', r['title'])[:15]
+        start = float(r['start_sec'])
+        end = float(r['end_sec'])
+        dur = round(end - start, 1)
+
+        with st.expander(f"후보 {idx}: {r['title']} ({dur}초)", expanded=(idx > len(st.session_state.all_shorts) - 3)):
+            st.write(f"⏱ **구간:** {int(start//60):02d}:{int(start%60):02d} ~ {int(end//60):02d}:{int(end%60):02d}")
+            st.write(f"💡 **선정 이유:** {r['hook_reason']}")
+
+            srt_data = generate_srt_content(r.get('subtitles', []))
+            xml_data = generate_xml_content(f"Shorts_{idx}_{clean_t}", start, end)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.download_button(
+                    label="📥 9:16 XML 다운로드",
+                    data=xml_data,
+                    file_name=f"Shorts_{idx}_{clean_t}.xml",
+                    mime="application/xml",
+                    key=f"xml_btn_{idx}_{start}"
+                )
+            with c2:
+                st.download_button(
+                    label="📥 싱크 SRT 자막 다운로드",
+                    data=srt_data,
+                    file_name=f"Shorts_{idx}_{clean_t}.srt",
+                    mime="text/plain",
+                    key=f"srt_btn_{idx}_{start}"
+                )
