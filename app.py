@@ -199,50 +199,6 @@ def generate_xml_content(seq_name, start_sec, end_sec, fps=30):
 
     return ET.tostring(x_meta, encoding="utf-8", xml_declaration=True)
 
-if st.button("🚀 숏츠 구간 추출 및 파일 생성", type="primary"):
-    if not api_key:
-        st.error("Gemini API 키를 입력해 주세요.")
-    elif not youtube_url:
-        st.error("유튜브 링크를 입력해 주세요.")
-    else:
-        with st.spinner("Gemini가 유튜브 영상을 직접 시청하고 분석 중입니다 (약 15~30초 소요)..."):
-            try:
-                results = analyze_video_with_gemini(youtube_url, api_key)
-                st.success("영상 분석 완료!")
-
-                for idx, r in enumerate(results, 1):
-                    clean_t = re.sub(r'[^0-9a-zA-Z가-힣\s_-]', '', r['title'])[:15]
-                    start = float(r['start_sec'])
-                    end = float(r['end_sec'])
-                    dur = round(end - start, 1)
-
-                    with st.expander(f"후보 {idx}: {r['title']} ({dur}초)", expanded=True):
-                        st.write(f"⏱ **구간:** {int(start//60):02d}:{int(start%60):02d} ~ {int(end//60):02d}:{int(end%60):02d}")
-                        st.write(f"💡 **선정 이유:** {r['hook_reason']}")
-
-                        srt_data = generate_srt_content(r.get('subtitles', []))
-                        xml_data = generate_xml_content(f"Shorts_{idx}_{clean_t}", start, end)
-
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.download_button(
-                                label="📥 9:16 XML 다운로드",
-                                data=xml_data,
-                                file_name=f"Shorts_{idx}_{clean_t}.xml",
-                                mime="application/xml",
-                                key=f"xml_{idx}"
-                            )
-                        with col2:
-                            st.download_button(
-                                label="📥 싱크 SRT 자막 다운로드",
-                                data=srt_data,
-                                file_name=f"Shorts_{idx}_{clean_t}.srt",
-                                mime="text/plain",
-                                key=f"srt_{idx}"
-                            )
-            except Exception as e:
-                st.error(f"분석 중 오류가 발생했습니다: {e}")
-
 # 세션 상태 초기화 (누적 보관용 리스트)
 if "all_shorts" not in st.session_state:
     st.session_state.all_shorts = []
