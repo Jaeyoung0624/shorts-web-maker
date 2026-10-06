@@ -30,7 +30,7 @@ components.html(
     height=0,
 )
 
-st.title("🎬 YouTube 롱폼 ➔ 9:16 숏츠 메이커")
+st.title("🎬YouTube롱폼 ➔ 9:16 숏츠 메이커")
 st.write("유튜브 링크만 넣으면 Gemini가 영상을 직접 분석해 숏츠 구간과 9:16 XML/자막을 생성합니다.")
 
 # 입력창 (기존에 저장된 키가 있으면 기본값으로 자동 채움)
