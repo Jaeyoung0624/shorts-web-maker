@@ -11,6 +11,17 @@ st.title("🎬 YouTube 롱폼 ➔ 9:16 숏츠 메이커")
 st.write("유튜브 링크만 넣으면 Gemini가 영상을 직접 분석해 숏츠 구간과 9:16 XML/자막을 생성합니다.")
 
 api_key = st.text_input("Gemini API Key", type="password", help="구글 Gemini API 키를 입력하세요")
+
+# 💡 API 키 발급 가이드 (접이식 안내창)
+with st.expander("❓ Gemini API 키는 어디서 무료로 발급받나요? (1분 컷)"):
+    st.markdown("""
+    1. **[Google AI Studio (클릭)](https://aistudio.google.com/app/apikey)** 에 접속해 구글 계정으로 로그인합니다.
+    2. 화면 좌측 또는 상단의 **[Create API key]** 파란색 버튼을 클릭합니다.
+    3. 안내창이 뜨면 **[Create API key in new project]** 를 선택합니다.
+    4. 생성된 영문+숫자 긴 문자열(키)을 **[Copy]** 하여 위의 입력창에 붙여넣으시면 됩니다.
+    
+    * **비용 안내:** 신용카드 등록 없이 완전 무료(하루 1,500회)로 사용 가능합니다.
+    """)
 youtube_url = st.text_input("🔗 유튜브 영상 링크")
 
 def analyze_video_with_gemini(yt_url, key):
